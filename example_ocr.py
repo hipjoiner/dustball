@@ -3,41 +3,83 @@ import os
 from google.cloud import vision
 
 
-class Point:
-    def __init__(self, x, y):
-        self.x = x
-        self.y = y
+x_increases_l_to_r = False
+y_increases_t_to_b = True
+
+
+class Line:
+    def __init__(self, word=None):
+        self.words = []
+        self.y_min = 1e6
+        self.y_max = 0
+        self.x_min = 1e6
+        self.x_max = 0
+        if word:
+            self.append(word)
+
+    def __str__(self):
+        return self.text
+
+    def append(self, word):
+        self.words.append(word)
+        self.x_min = min(self.x_min, word.x_min)
+        self.x_max = max(self.x_max, word.x_max)
+        self.y_min = min(self.y_min, word.y_min)
+        self.y_max = max(self.y_max, word.y_max)
+
+    def takes(self, word):
+        """Is this word on this line?"""
+        if not self.words:
+            return True
+        # if y_increases_t_to_b:
+        #     return self.y_max < word.y_min and word.y_max < self.y_min
+        # else:
+        return self.y_min < word.y_max and word.y_min < self.y_max
+
+    @property
+    def text(self):
+        return ' '.join([word.text for word in self.words])
+
+
+class Word:
+    def __init__(self, gword):
+        self.text = ''
+        self.y_min = 1e6
+        self.y_max = 0
+        self.x_min = 1e6
+        self.x_max = 0
+        for symbol in gword.symbols:
+            self.text = f'{self.text}{symbol.text}'
+            poly = symbol.bounding_box
+            for v in poly.vertices:
+                self.x_min = min(self.x_min, v.x)
+                self.x_max = max(self.x_max, v.x)
+                self.y_min = min(self.y_min, v.y)
+                self.y_max = max(self.y_max, v.y)
+
+    def __lt__(self, other):
+        """Logic depends on whether coordinates are increasing or decreasing from top to bottom
+        I don't yet know why they vary from one image to the next.  Rotation?
+        """
+        if self.y_max < other.y_min:
+            return y_increases_t_to_b
+        elif other.y_max < self.y_min:
+            return not y_increases_t_to_b
+        if self.x_min < other.x_min:
+            return x_increases_l_to_r
 
     def __repr__(self):
-        return f'({self.y},{self.x})'
+        return f'{self.text} {self.y_min}-{self.y_max} {self.x_min}-{self.x_max}'
 
+    def __str__(self):
+        return self.text
 
-class Symbol:
-    def __init__(self, gsymbol):
-        self.gsymbol = gsymbol
-        self.tl = None
-        self.lr = None
-        self.text = gsymbol.text
-
-
-def parse_symbol(symbol):
-    poly = symbol.bounding_box
-    minx = 1e6
-    miny = 1e6
-    maxx = 0
-    maxy = 0
-    for v in poly.vertices:
-        # print(v)
-        if v.x < minx:
-            minx = v.x
-        elif v.x > maxx:
-            maxx = v.x
-        if v.y < miny:
-            miny = v.y
-        elif v.y > maxy:
-            maxy = v.y
-    line = f'({minx},{miny}) ({maxx},{maxy}) {symbol.text}'
-    return line
+    def append(self, append_word):
+        self.text = f'{self.text}{append_word.text}'
+        self.x_min = min(self.x_min, append_word.x_min)
+        self.x_max = max(self.x_max, append_word.x_max)
+        self.y_min = min(self.y_min, append_word.y_min)
+        self.y_max = max(self.y_max, append_word.y_max)
 
 
 def detect_text(fpath):
@@ -51,32 +93,74 @@ def detect_text(fpath):
     if response.error.message:
         raise Exception(response.error.message)
     document = response.full_text_annotation
+    return document
+
+
+def form_words(document):
+    raw = []
     for page in document.pages:
         for block in page.blocks:
             for paragraph in block.paragraphs:
+                # print(paragraph)
                 for word in paragraph.words:
-                    for symbol in word.symbols:
-                        data = parse_symbol(symbol)
-                        print(data)
-    return document
-    # print(texts)
-    # text = texts[0]             # First one appears to be all text; others look like sub-groups?
-    # return text.description
+                    w = Word(word)
+                    raw.append(w)
+                # print('')
+    words = []
+    for w in raw:
+        if w.text in ['.', ',', ':', '-', ')']:
+            words[-1].append(w)
+        elif words and words[-1].text.endswith(('(', '-', '~', '•')):
+            words[-1].append(w)
+        else:
+            words.append(w)
+    words = sorted(words)
+    return words
+
+
+def form_lines(words):
+    lines = []
+    line = Line()
+    for word in words:
+        if line.takes(word):
+            line.append(word)
+        else:
+            lines.append(line)
+            line = Line(word)
+    if line.words:
+        lines.append(line)
+    return lines
 
 
 def main():
-    test_dir = 'C:/Users/John/Documents/src/dustball/local'
+    test_dir = 'C:/Users/John/OneDrive/src/dustball/local'
     cred_fpath = f'{test_dir}/valiant-broker-355912-67d74ed7957a.json'
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = cred_fpath
 
     images = sorted([entry.path.replace('\\', '/') for entry in os.scandir(test_dir) if entry.name.endswith('.jpg')])
     for jpg_path in images:
         print(f'{jpg_path}:')
-        result = detect_text(jpg_path)
-        # out_path = jpg_path.replace('.jpg', '.txt')
-        # with open(out_path, 'w') as fp:
-        #     fp.write(str(result))
-        # print(result)
+        document = detect_text(jpg_path)
+        words = form_words(document)
+        """
+        print(f' Ymin  Ymax  Xmin  Xmax Word        ')
+        print(f'----------- ----------- ------------')
+        for word in words:
+            print(f'{word.y_min:5}-{word.y_max:5} {word.x_min:5}-{word.x_max:5} {word.text:12}')
+        print('')
+        """
+        lines = form_lines(words)
+        """
+        print(f' Ymin  Ymax  Xmin  Xmax Line        ')
+        print(f'----------- ----------- ------------')
+        for line in lines:
+            print(f'{line.y_min:5}-{line.y_max:5} {line.x_min:5}-{line.x_max:5} {line.text:12}')
+        print('')
+        """
+        # print(f'Final:')
+        # print(f'------')
+        for line in lines:
+            print(line.text)
         print('')
 
 
