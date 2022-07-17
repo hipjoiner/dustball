@@ -156,7 +156,7 @@ def show_lines(lines):
     print('')
 
 
-def main():
+def scan_images_to_text():
     images = sorted([entry.path.replace('\\', '/') for entry in os.scandir(working_dir) if entry.name.endswith('.jpg')])
     body = []
     for jpg_path in images:
@@ -166,14 +166,13 @@ def main():
         lines = form_lines(words)
         for line in lines:
             body.append(line.text)
-        # print('')
-        # body.extend(lines)
     for line in body:
         print(line)
-    text_fpath = f'{working_dir}/directions-raw.txt'
+    text_fpath = f'{working_dir}/scanned.txt'
     with open(text_fpath, 'w') as fp:
         fp.write('\n'.join(body))
+    print(f'Wrote {text_fpath}.')
 
 
 if __name__ == '__main__':
-    main()
+    scan_images_to_text()
