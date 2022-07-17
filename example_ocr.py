@@ -3,7 +3,7 @@ import os
 from google.cloud import vision
 
 
-x_increases_l_to_r = False
+x_increases_l_to_r = True
 y_increases_t_to_b = True
 
 
@@ -67,6 +67,7 @@ class Word:
             return not y_increases_t_to_b
         if self.x_min < other.x_min:
             return x_increases_l_to_r
+        return not x_increases_l_to_r
 
     def __repr__(self):
         return f'{self.text} {self.y_min}-{self.y_max} {self.x_min}-{self.x_max}'
@@ -132,36 +133,43 @@ def form_lines(words):
     return lines
 
 
+def show_words(words):
+    print(f' Ymin  Ymax  Xmin  Xmax Word        ')
+    print(f'----------- ----------- ------------')
+    for word in words:
+        print(f'{word.y_min:5}-{word.y_max:5} {word.x_min:5}-{word.x_max:5} {word.text:12}')
+    print('')
+
+
+def show_lines(lines):
+    print(f' Ymin  Ymax  Xmin  Xmax Line        ')
+    print(f'----------- ----------- ------------')
+    for line in lines:
+        print(f'{line.y_min:5}-{line.y_max:5} {line.x_min:5}-{line.x_max:5} {line.text:12}')
+    print('')
+
+
 def main():
     test_dir = 'C:/Users/John/OneDrive/src/dustball/local'
     cred_fpath = f'{test_dir}/valiant-broker-355912-67d74ed7957a.json'
     os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = cred_fpath
 
     images = sorted([entry.path.replace('\\', '/') for entry in os.scandir(test_dir) if entry.name.endswith('.jpg')])
+    body = []
     for jpg_path in images:
-        print(f'{jpg_path}:')
+        print(f'Loading {jpg_path}...')
         document = detect_text(jpg_path)
         words = form_words(document)
-        """
-        print(f' Ymin  Ymax  Xmin  Xmax Word        ')
-        print(f'----------- ----------- ------------')
-        for word in words:
-            print(f'{word.y_min:5}-{word.y_max:5} {word.x_min:5}-{word.x_max:5} {word.text:12}')
-        print('')
-        """
         lines = form_lines(words)
-        """
-        print(f' Ymin  Ymax  Xmin  Xmax Line        ')
-        print(f'----------- ----------- ------------')
         for line in lines:
-            print(f'{line.y_min:5}-{line.y_max:5} {line.x_min:5}-{line.x_max:5} {line.text:12}')
-        print('')
-        """
-        # print(f'Final:')
-        # print(f'------')
-        for line in lines:
-            print(line.text)
-        print('')
+            body.append(line.text)
+        # print('')
+        # body.extend(lines)
+    for line in body:
+        print(line)
+    text_fpath = f'{test_dir}/directions.txt'
+    with open(text_fpath, 'w') as fp:
+        fp.write('\n'.join(body))
 
 
 if __name__ == '__main__':
