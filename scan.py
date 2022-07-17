@@ -1,6 +1,13 @@
+"""
+Call the Google Vision API to scan one or more jpg files in our working directory,
+producing a single output text file to be raw material for navigation directions.
+"""
+
 import io
 import os
 from google.cloud import vision
+
+from config import working_dir
 
 
 x_increases_l_to_r = True
@@ -150,11 +157,7 @@ def show_lines(lines):
 
 
 def main():
-    test_dir = 'C:/Users/John/OneDrive/src/dustball/local'
-    cred_fpath = f'{test_dir}/valiant-broker-355912-67d74ed7957a.json'
-    os.environ['GOOGLE_APPLICATION_CREDENTIALS'] = cred_fpath
-
-    images = sorted([entry.path.replace('\\', '/') for entry in os.scandir(test_dir) if entry.name.endswith('.jpg')])
+    images = sorted([entry.path.replace('\\', '/') for entry in os.scandir(working_dir) if entry.name.endswith('.jpg')])
     body = []
     for jpg_path in images:
         print(f'Loading {jpg_path}...')
@@ -167,7 +170,7 @@ def main():
         # body.extend(lines)
     for line in body:
         print(line)
-    text_fpath = f'{test_dir}/directions.txt'
+    text_fpath = f'{working_dir}/directions-raw.txt'
     with open(text_fpath, 'w') as fp:
         fp.write('\n'.join(body))
 
