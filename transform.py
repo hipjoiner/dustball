@@ -3,16 +3,35 @@ From image-scanned raw text, massage text into something clean and formatted
 that can be transformed into json
 """
 import json
+import re
 
 from config import working_dir
+
+
+do_not_divert = re.compile(re.escape('do not divert'), re.IGNORECASE)
 
 
 def new_leg():
     return {
         'origin':      None,
-        'destination': None,
         'waypoints':   [],
+        'destination': None,
     }
+
+
+def parse_road(line):
+    toks = line.split('.')
+    tail = ''.join(toks[1:])
+    loc = tail.find(' onto ')
+    if loc != -1:
+        tail = tail[loc + 5:]
+    else:
+        loc = tail.find(' on ')
+        if loc != -1:
+            tail = tail[loc + 3:]
+    tail = do_not_divert.sub('', tail)
+    road = tail.strip(' ')
+    return road
 
 
 def parse_legs():
@@ -21,29 +40,24 @@ def parse_legs():
         lines = fp.read().split('\n')
     legs = []
     leg = new_leg()
+    prev_road = None
     for line in lines:
         if line.startswith('S'):
-            stop = ''.join(line.split('.')[1:]).lstrip(' ')
+            place = ''.join(line.split('.')[1:]).strip(' ')
             if leg['origin']:
-                leg['destination'] = stop
+                leg['destination'] = place
                 legs.append(leg)
                 leg = new_leg()
             if line != lines[-1]:
-                leg['origin'] = stop
+                leg['origin'] = place
             else:
                 legs.append(leg)
         else:
-            toks = line.split('.')
-            tail = ''.join(toks[1:])
-            loc = tail.find(' onto ')
-            if loc != -1:
-                tail = tail[loc + 5:]
-            else:
-                loc = tail.find(' on ')
-                if loc != -1:
-                    tail = tail[loc + 3:]
-            wayp = tail
-            leg['waypoints'].append(wayp.lstrip(' '))
+            road = parse_road(line)
+            if prev_road:
+                intersection = f'{prev_road} & {road}'
+                leg['waypoints'].append(intersection)
+            prev_road = road
     return legs
 
 
