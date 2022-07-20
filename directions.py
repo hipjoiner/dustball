@@ -1,5 +1,5 @@
 """
-Complete geocode data for origin/waypoints/destination computed in nearby.py, written to nearby.json
+Complete geocode data for origin/waypoints/destination computed in nearby.py, written to nearby-n.json
 Now, use an html template to produce a renderable browser page.
 Into the template html, insert:
     gmaps API key
@@ -13,6 +13,7 @@ import json
 from config import working_dir, gmaps_key
 from template import html_template
 
+# TODO: Pick up all nearby files and iterate
 nearby_fpath = f'{working_dir}/nearby.json'
 with open(nearby_fpath, 'r') as fp:
     points = json.load(fp)
